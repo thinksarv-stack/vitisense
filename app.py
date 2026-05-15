@@ -30,10 +30,21 @@ def index():
             grape_file = request.files['grape_image']
             sugar = request.form.get('sugar', '15.0')
 
-            # Convert images to base64 for Groq Vision
+            # Convert images to base64 for Groq Vision (with resizing to avoid size limits)
             def encode_image(file_storage):
                 file_storage.seek(0)
-                return base64.b64encode(file_storage.read()).decode('utf-8')
+                img = Image.open(file_storage)
+                
+                # Resize image if it's too large (Groq has strict payload limits)
+                img.thumbnail((800, 800))
+                
+                # Convert to RGB (removes alpha channel which can cause issues)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                    
+                buffer = BytesIO()
+                img.save(buffer, format="JPEG", quality=85)
+                return base64.b64encode(buffer.getvalue()).decode('utf-8')
 
             leaf_base64 = encode_image(leaf_file)
             grape_base64 = encode_image(grape_file)
