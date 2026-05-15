@@ -52,7 +52,7 @@ def index():
 
             # Note: Changed to gemini-1.5-flash for free tier compatibility
             response = client.models.generate_content(
-                model='gemini-2.5-flash',
+                model='gemini-1.5-flash',
                 contents=[prompt, leaf_img, grape_img]
             )
             
