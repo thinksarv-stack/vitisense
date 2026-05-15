@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, send_file
 from flask_cors import CORS
-from google import genai
+from groq import Groq
+import base64
 from PIL import Image
 import os
 from io import BytesIO
@@ -17,9 +18,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 app = Flask(__name__)
 CORS(app)
 
-# SETUP GEMINI CLIENT
-API_KEY = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=API_KEY)
+# SETUP GROQ CLIENT
+API_KEY = os.environ.get("GROQ_API_KEY")
+client = Groq(api_key=API_KEY)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -29,8 +30,13 @@ def index():
             grape_file = request.files['grape_image']
             sugar = request.form.get('sugar', '15.0')
 
-            leaf_img = Image.open(leaf_file)
-            grape_img = Image.open(grape_file)
+            # Convert images to base64 for Groq Vision
+            def encode_image(file_storage):
+                file_storage.seek(0)
+                return base64.b64encode(file_storage.read()).decode('utf-8')
+
+            leaf_base64 = encode_image(leaf_file)
+            grape_base64 = encode_image(grape_file)
 
             # Fixed Indentation for the Prompt
             prompt = f"""
@@ -50,13 +56,31 @@ def index():
             Constraints: Use bullet points. Ensure every point contains 2-3 insightful, complete sentences.
             """
 
-            # Note: Changed to gemini-1.5-flash for free tier compatibility
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[prompt, leaf_img, grape_img]
+            # Use Groq Llama 3.2 Vision model
+            response = client.chat.completions.create(
+                model='llama-3.2-11b-vision-preview',
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{leaf_base64}"}
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/jpeg;base64,{grape_base64}"}
+                            }
+                        ]
+                    }
+                ],
+                temperature=0.2,
+                max_tokens=1024
             )
             
-            return render_template('index.html', result=True, report=response.text)
+            report = response.choices[0].message.content
+            return render_template('index.html', result=True, report=report)
 
         except Exception as e:
             print(f"Server Error: {e}")

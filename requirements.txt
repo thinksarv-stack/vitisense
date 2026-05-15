@@ -1,6 +1,6 @@
 Flask
 Flask-CORS
-google-genai
+groq
 Pillow
 reportlab
 gunicorn
